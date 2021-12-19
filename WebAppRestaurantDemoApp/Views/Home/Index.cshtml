@@ -1,0 +1,401 @@
+﻿@model Tuple<IEnumerable<SelectListItem>, IEnumerable<SelectListItem>, IEnumerable<SelectListItem>>
+@{
+    ViewBag.Title = "Index";
+}
+<script src="~/Scripts/jquery-3.0.0.min.js"></script>
+<script type="text/javascript">
+    $(document).ready(function () {
+        loadItem();
+        $("#txtQuantity").val('1.00');
+        $("#btnPayment").prop('disabled', true);
+        $("#btnCheckOut").prop('disabled', true);
+        $("#txtFinalTotal").val(parseFloat(0.00).toFixed(2));
+        $("#Item").change(function () {
+            loadItem();
+        });
+
+        $("input[type=text]").change(function () {
+            CalculateSubTotal();
+        });
+
+        $("input[type=text]").keyup(function () {
+            CalculateBalance();
+        });
+
+        $("#btnAddToList").click(function () {
+            AddToTheItemList();
+            FinalItemTotal();
+        });
+
+        $("#btnPayment").click(function () {
+            FinalPayment();
+        });
+
+        $("#btnReset").click(function () { ResetItems(); ResetItemsDetails(); });
+    });
+
+    function FinalPayment() {
+        var objOrderViewModel = {};
+        var ListOrderDetailViewModel = new Array();
+        objOrderViewModel.PaymentTypeId = $("#PaymentType").val();
+        objOrderViewModel.CustomerId = $("#Customer").val();
+        objOrderViewModel.FinalTotal = $("#txtFinalTotal").val();
+        $("#tblRestaurantItemList").find("tr:gt(0)").each(function () {
+            var objOrderDetailViewModel = {};
+            objOrderDetailViewModel.ItemId = $(this).find("td:eq(0)").text();
+            objOrderDetailViewModel.Quantity = $(this).find("td:eq(3)").text();
+            objOrderDetailViewModel.Total = $(this).find("td:eq(5)").text();
+            objOrderDetailViewModel.Discount = $(this).find("td:eq(4)").text();
+            objOrderDetailViewModel.UnitPrice = $(this).find("td:eq(2)").text();
+            ListOrderDetailViewModel.push(objOrderDetailViewModel);
+        });
+        objOrderViewModel.listOrderDetailViewModel = ListOrderDetailViewModel;
+
+        $.ajax({
+            async: true,
+            type: 'POST',
+            dataType: 'JSON',
+            contentType: 'application/json; charset=utf-8',
+            data: JSON.stringify(objOrderViewModel),
+            url: '/home/Index',
+            success: function (data) { alert(data) },
+            error: function () { alert('There is some problem to get the unit price.') }
+        });
+
+        ResetItems();
+        ResetItemsDetails();
+    }
+
+    function ResetItemsDetails() {
+        $('#divPayment').modal('hide');
+        $("#tblRestaurantItemList").find("tr:gt(0)").each(function () {
+            $(this).remove();
+        });
+
+        $("#txtFinalTotal").val(parseFloat(0.00).toFixed(2));
+        $("#txtPaymentTotal").val(parseFloat(0.00).toFixed(2));
+        $("#txtBalance").val(parseFloat(0.00).toFixed(2));
+        $("#PaymentType").val(0); $("#Customer").val(0);
+     
+    }
+
+
+    function AddToTheItemList() {
+        var totalItemList = $("#tblRestaurantItemList");
+        var UnitPrice = $("#txtUnitPrice").val();
+        var Quantity = $("#txtQuantity").val();
+        var Discount = $("#txtDiscount").val();
+        var ItemId = $("#Item").val();
+        var ItemName = $("#Item option:selected").text();
+        var Total = (UnitPrice * Quantity) - Discount;
+
+        
+        var ItemList = "<tr><td hidden> " + ItemId + "</td><td>"
+            + ItemName + "</td><td>" +
+            parseFloat(UnitPrice).toFixed(2) + "</td><td>" +
+            parseFloat(Quantity).toFixed(2) + "</td><td>" +
+            parseFloat(Discount).toFixed(2) + "</td><td>"
+            + parseFloat(Total).toFixed(2) + "</td> <td> <input type='button' value='Remove' name='remove' class='btn btn-danger' onclick='RemoveItem(this)'/>" + "</td></tr>";
+
+        totalItemList.append(ItemList);
+        ResetItems();
+        EnableDisableCheckOut();
+    }
+
+    function EnableDisableCheckOut() {
+        $("#btnCheckOut").prop('disabled', true);
+        if ($('#tblRestaurantItemList tr').length > 1)
+            $("#btnCheckOut").prop('disabled', false);
+    }
+
+
+    function ResetItems() {
+        $("#txtQuantity").val('1.00');
+        $("#txtDiscount").val('0.00');
+        $("#Item").val(1);
+        $("#txtTotal").val('0.00');
+        $("#btnPayment").prop('disabled', true);
+        $("#btnCheckOut").prop('disabled', true);
+    }
+
+    function RemoveItem(itemId) {
+        $(itemId).closest('tr').remove();
+        EnableDisableCheckOut();
+    }
+
+    function FinalItemTotal() {
+        $("#txtFinalTotal").val("0.00");
+        var FinalTotal = 0.00;
+        $("#tblRestaurantItemList").find("tr:gt(0)").each(function () {
+            var Total = $(this).find("td:eq(5)").text();
+            FinalTotal += parseFloat(Total);
+        });
+
+        $("#txtFinalTotal").val(parseFloat(FinalTotal).toFixed(2));
+
+        $("#txtPaymentTotal").val(parseFloat(FinalTotal).toFixed(2));
+        $("#txtBalance").val(parseFloat(FinalTotal).toFixed(2));
+
+    }
+
+
+    function loadItem() {
+        var itemId = $("#Item").val();
+        GetItemUnitPrice(itemId);
+    }
+
+    function GetItemUnitPrice(itemId) {
+        $.ajax({
+            async: true,
+            type: 'GET',
+            dataType: 'JSON',
+            contentType: 'application/json; charset=utf-8',
+            data: { itemId: itemId },
+            url: '/home/getItemUnitPrice',
+            success: function (data) { $("#txtUnitPrice").val(data).toFixed(2) },
+            error: function () { alert('There is some problem to get the unit price.')}
+        });
+    }
+
+    function CalculateSubTotal() {
+        var UnitPrice = $("#txtUnitPrice").val();
+        var Quantity = $("#txtQuantity").val();
+        var Discount = $("#txtDiscount").val();
+
+        var Total = (UnitPrice * Quantity) - Discount;
+
+        $("#txtTotal").val(parseFloat(Total).toFixed(2));
+       
+    }
+
+    function CalculateBalance() {
+        var FinalAmount = $("#txtPaymentTotal").val();
+        var PaymentAmount = $("#txtPaymentAmount").val();
+        var ReturnAmount = $("#txtReturnTotal").val();
+        var BalanceAmount = parseFloat(FinalAmount) + parseFloat(ReturnAmount)
+            - parseFloat(PaymentAmount);
+
+        $("#txtBalance").val(parseFloat(BalanceAmount));
+
+        if (BalanceAmount != 0.00) {
+            $("#btnPayment").prop('disabled', true);
+        }
+        else {
+            $("#btnPayment").prop('disabled', false);
+        }
+    }
+</script>
+
+<style>
+    .modal{
+        text-align:center;
+        padding: 0 !important;
+    }
+    .modal:before{
+        content:'';
+        display:inline-block;
+        height:100%;
+        vertical-align:middle;
+        margin-right:-4px;
+    }
+    .modal-dialog{
+        display: inline-block;
+        text-align:left;
+        vertical-align:middle;
+    }
+
+    fieldset{
+        border : 1px solid #ddd !important;
+        margin: 0;
+        xmin-width:0;
+        padding:10px;
+        position: relative;
+        border-radius: 4px;
+        background-color: #f5f5f5;
+        padding-left: 10px !important;
+    }
+
+    legand{
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom : 0px;
+        width: 35%;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        padding: 5px 5px 5px 10px;
+        background-color: #ffffff;
+    }
+</style>
+
+<fieldset>
+    <legend>Restaurant</legend>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="form-group">
+                    Customer:
+                    @Html.DropDownList("Customer", new SelectList(Model.Item1, "Value", "Text"),
+                   new { @class = "form-control" })
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-group">
+                    Payment Type:
+                    @Html.DropDownList("PaymentType", new SelectList(Model.Item3, "Value", "Text"),
+                   new { @class = "form-control" })
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="form-group">
+                    Total:
+                   
+                    <input style="text-align:right; font-weight:bold"  name="FinalTotal" type="text" readonly="readonly" id="txtFinalTotal"
+                           class="form-control"/>
+                </div>
+            </div>
+        </div>
+    </div>
+</fieldset>
+
+<fieldset>
+    <legend>
+        Restaurant Items: 
+    </legend>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="form-group">
+                    Item :
+                    @Html.DropDownList("Item", new SelectList(Model.Item2, "Value", "Text"),
+                  new { @class = "form-control" })
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="form-group">
+                    Unit Price :
+                    <input style="text-align:right" type="text" readonly="readonly" id="txtUnitPrice"
+                           value="0.00" name="UnitPrice" class="form-control" />
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div  class="form-group">
+                    Quantity:
+                    <input style="text-align:right" type="text" id="txtQuantity"
+                           value="0.00" name="Quantity" class="form-control" />
+                </div>
+            </div>
+        </div>
+        <div class="row">
+
+            <div class="col-md-4">
+                <div class="form-group">
+                    Discount:
+                    <input style="text-align:right" type="text" id="txtDiscount"
+                           value="0.00" name="Discount" class="form-control" />
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="form-group">
+                    Total:
+                    <input style="text-align:right" readonly="readonly" type="text" id="txtTotal"
+                           value="0.00" name="Total" class="form-control" />
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-group">
+                    <input type="button" id="btnAddToList" style="margin-top:20px;"
+                           value="Add To List" name="AddToList" class="btn btn-success" />
+                </div>
+            </div>
+        </div>
+    </div>
+</fieldset>
+
+<fieldset>
+    <legend>Restaurant Listed items</legend>
+    <table style="width:100%" id="tblRestaurantItemList">
+        <thead>
+            <tr>
+                <th hidden>
+                    Item Id
+                </th>
+                <th>
+                    Item Name
+                </th>
+                <th>
+                    Unit Price
+                </th>
+                <th>
+                    Quantity
+                </th>
+                <th>
+                    Discount
+                </th>
+                <th>
+                    Total
+                </th>
+                <th>
+                    Action
+                </th>
+            </tr>
+        </thead>
+    </table>
+</fieldset>
+
+<div class="mt-3" style="float:right">
+    <input data-backdrop="static" data-keydrop="false" data-toggle="modal" data-target="#divPayment" type="button" value="Check Out" name="CheckOut" id="btnCheckOut"
+           class="btn btn-primary" />
+
+
+    <input  type="button" value="Reset" name="Reset" id="btnReset"
+           class="btn btn-danger" />
+</div>
+
+<div id="divPayment" class="modal fade">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">Payment</h4>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+
+            </div>
+
+
+            <div class="modal-body">
+                <div class="container">
+                    <div class="row">
+                        <div class="form-group col-md-6">
+                            Payment Total:
+                            <input style="text-align:right" type="text" id="txtPaymentTotal" readonly="readonly" value="0.00" class="form-control" />
+                        </div>
+                        <div class="form-group col-md-6">
+                            Payment Amount:
+                            <input style="text-align:right" type="text" id="txtPaymentAmount" value="0.00" class="form-control" />
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="form-group col-md-6">
+                            Return Total:
+                            <input style="text-align:right" type="text" id="txtReturnTotal" value="0.00" class="form-control" />
+                        </div>
+                        <div class="form-group col-md-6">
+                            Balance Amount:
+                            <input style="text-align:right" type="text" id="txtBalance" readonly="readonly" value="0.00" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnPayment" class="btn btn-success" value="Payment">Payment</button>
+                <button id="btnClose" data-dismiss="modal" class="btn btn-danger" value="Close">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
